@@ -11,7 +11,7 @@ pspsh.set_colorkey(MAGENTA)
 fspsh = py.image.load("highlspsheet.png")
 fspsh = py.transform.scale_by(fspsh, 5)
 fspsh.set_colorkey(MAGENTA)
-pnumtoname = {0 : '', 1 : 'p', 2 : 'n', 3 : 'b', 4 : 'r', 5 : 'q', 6 : 'k'}
+pnumtoname = {0 : '*', 1 : 'p', 2 : 'n', 3 : 'b', 4 : 'r', 5 : 'q', 6 : 'k'}
 pttolegalmoves = {1 : [(0, -1)], 
                   2 : [(i, j) for i in (-2, -1, 1, 2) for j in (-2, -1, 1, 2) if (i + j) & 0x01 == 1], 
                   6 : [(i, j) for i in range(-1, 2) for j in range(-1, 2) if i != 0 or j != 0]}
@@ -22,29 +22,33 @@ pttolegaldirec = {3 : [(-1, -1), (-1, 1), (1, -1), (1, 1)],
 #type -> empty: 0, pawn: 1, knight: 2, bishop: 3, rook: 4, queen: 5, king: 6 
 #x -> 0 - 7, left to right increasing
 #y -> 0 - 7, top to bottom increasing (reverse of normal, graphics convention)
+def boundscheck(cx, cy):
+    return cx >= 0 and cx < 8 and cy >= 0 and cy < 8
 class Board():
     def __init__(self):
-        self.data = [Piece(0, 0, (i & 0x07), (i >> 3)) for i in range(64)]
+        self.data = []
         for i in range(8):
-            self.data[8 + i].team = 0
-            self.data[8 + i].type = 1
-            self.data[48 + i].team = 1
-            self.data[48 + i].type = 1
+            self.data.append(Piece(1, 1, i, 6))
+            self.data.append(Piece(1, 0, i, 1))
         for i in range(4):
-            self.data[7 * (i & 0x01) + 56 * (i >> 1)].team = i >> 1
-            self.data[7 * (i & 0x01) + 56 * (i >> 1)].type = 4
-            self.data[1 + 5 * (i & 0x01) + 56 * (i >> 1)].team = i >> 1
-            self.data[1 + 5 * (i & 0x01) + 56 * (i >> 1)].type = 2            
-            self.data[2 + 3 * (i & 0x01) + 56 * (i >> 1)].team = i >> 1
-            self.data[2 + 3 * (i & 0x01) + 56 * (i >> 1)].type = 3
-            self.data[3 + (i & 0x01) + 56 * (i >> 1)].team = i >> 1
-            self.data[3 + (i & 0x01) + 56 * (i >> 1)].type = 5 + (i & 0x01)
+            i1, i0 = i >> 1, i & 0x01
+            self.data.append(Piece(4, i1, 7 * i0, 7 * i1))
+            self.data.append(Piece(2, i1, 5 * i0 + 1, 7 * i1))
+            self.data.append(Piece(3, i1, 3 * i0 + 2, 7 * i1))
+            self.data.append(Piece(5 + i0, i1, i0 + 3, 7 * i1))
+    def __repr__(self):
+        rt = ""
+        for i in self.data:
+            rt += f"{i.__repr__()} "
+        return rt
     def render(self):
         for i in range(64):
             py.draw.rect(win, CWHITE if (((i & 0x07) + (i >> 3)) & 0x01 == 0) else CBLACK, ((i & 0x07) * 80, (i >> 3) * 80, 80, 80))
-            self.data[i].render()
+        for piece in self.data:
+            piece.render()
     def get_legal_moves(self, cx, cy):
         pt = self.data[cx + cy * 8].type
+        pteam = self.data[cx + cy * 8].team
         checkedlegalmoves = []
         if pt == 0:
             return []
@@ -99,15 +103,17 @@ class Piece():
         self.team = team
         self.x = x
         self.y = y
-        self.moveableto = False
     def render(self):
         win.blit(pspsh, (self.x * 80, self.y * 80), (self.type * 80, self.team * 80, 80, 80))
+    def __repr__(self):
+        return f"{pnumtoname[self.type]} {self.x} {self.y}"
 running = True
 clock = py.time.Clock()
 board = Board()
 def clickHandler(board: Board):
     mp = py.mouse.get_pos()
     mx, my = mp[0] // 80, mp[1] // 80
+    print(board)
 while running:
     clock.tick(60)
     events = py.event.get()
@@ -121,7 +127,6 @@ while running:
             mpressed = py.mouse.get_pressed()
             if mpressed[0]:
                 clickHandler(board)
-    board.rand_move(random.randint(0, 1))
     if keys[py.K_q]:
         running = False
     board.render()
